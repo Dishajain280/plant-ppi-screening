@@ -75,13 +75,19 @@ def parse_summary(path: Path) -> Score:
 
 
 def _pair_id_from_path(path: Path) -> str:
-    """Recover the pair id from the folder name, falling back to the filename."""
+    """Recover the pair id from the folder or file name.
+
+    AlphaFold Server writes results as ``fold_<job name>_summary_confidences.json``,
+    so the ``fold_`` prefix has to be removed for the id to match the candidate list.
+    """
     for part in (path.parent.name, path.name):
         if not part:
             continue
         stem = part
         for marker in ("_summary_confidences", "_model", "_full_data"):
             stem = stem.split(marker)[0]
+        if stem.lower().startswith("fold_"):
+            stem = stem[5:]
         if stem:
             return stem
     return "unknown"

@@ -24,10 +24,11 @@ class Job:
     chain_b: str
     tokens: int
 
-    def as_server_job(self, seed: int = 1) -> dict:
+    def as_server_job(self, seed: int | None = None) -> dict:
+        # The server docs recommend an empty seed list, which lets it pick one seed.
         return {
             "name": self.pair_id,
-            "modelSeeds": [seed],
+            "modelSeeds": [] if seed is None else [seed],
             "sequences": [
                 {"proteinChain": {"sequence": self.chain_a, "count": 1}},
                 {"proteinChain": {"sequence": self.chain_b, "count": 1}},
@@ -90,7 +91,7 @@ def _parse_range(text: str | None) -> tuple[int | None, int | None]:
     return int(start), (int(end) if end.strip() else None)
 
 
-def write_batches(plan_obj: BatchPlan, out_dir: Path, seed: int = 1,
+def write_batches(plan_obj: BatchPlan, out_dir: Path, seed: int | None = None,
                   max_jobs: int = MAX_JOBS_PER_FILE) -> list[Path]:
     """Write one JSON file per group of jobs and return the written paths."""
     out_dir = Path(out_dir)

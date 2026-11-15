@@ -17,8 +17,9 @@ figure below is synthetic demo output, generated to prove the pipeline works.
 ![Ranked screening scores, demo data](demo/report/figure.svg)
 
 Method, metric definitions and the honest limitations are in
-[docs/method.md](docs/method.md). CI runs the test suite and this demo on every
-push, across Python 3.10–3.12.
+[docs/method.md](docs/method.md). Uploading jobs and downloading results step by
+step is in [docs/running-predictions.md](docs/running-predictions.md). CI runs the
+test suite and this demo on every push, across Python 3.10–3.12.
 
 ## Why this exists
 
@@ -119,6 +120,7 @@ ppi/metrics.py           AUC, recall in the top slice, precision, bootstrap CIs
 ppi/report.py            markdown table and dependency-free SVG figure
 data/candidates.csv      curated pairs with sources and verification flags
 docs/method.md           protocol, metric definitions, limitations
+docs/running-predictions.md  upload, quota, download and scoring runbook
 tests/                   26 offline tests, no network required
 .github/workflows/ci.yml tests plus the demo, on every push
 CITATION.cff             citation metadata (GitHub "Cite this repository")

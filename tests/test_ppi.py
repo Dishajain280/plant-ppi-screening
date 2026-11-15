@@ -171,6 +171,7 @@ class TestBatch(unittest.TestCase):
             payload = json.loads(paths[0].read_text(encoding="utf-8"))
         self.assertEqual(payload[0]["name"], "j1")
         self.assertEqual(payload[0]["dialect"], "alphafoldserver")
+        self.assertEqual(payload[0]["modelSeeds"], [])  # empty list per the server docs
         self.assertEqual(payload[0]["sequences"][0]["proteinChain"]["sequence"], "MSTN")
 
     def test_quota_tracker_counts_today(self):
@@ -195,6 +196,16 @@ class TestResults(unittest.TestCase):
         self.assertEqual(score.pair_id, "VIP1_BZIP29")
         self.assertAlmostEqual(score.iptm, 0.83)
         self.assertAlmostEqual(score.min_chain_pair_pae, 4.2)
+
+    def test_server_fold_prefix_is_stripped(self):
+        payload = {"iptm": 0.72, "ptm": 0.6}
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "fold_VIP1_BZIP29"
+            folder.mkdir()
+            path = folder / "fold_VIP1_BZIP29_summary_confidences.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            score = results.parse_summary(path)
+        self.assertEqual(score.pair_id, "VIP1_BZIP29")
 
     def test_collect_writes_one_row_per_pair(self):
         payload = {"iptm": 0.5, "ptm": 0.4}
