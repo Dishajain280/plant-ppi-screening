@@ -328,6 +328,32 @@ class TestEvaluateGuard(unittest.TestCase):
                              "--out", str(root / "report")])
         self.assertEqual(code, 2)
 
+    def test_calibration_only_reports_and_exits_cleanly(self):
+        fields = ["pair_id", "gene_a", "gene_b", "acc_a", "acc_b", "range_a", "range_b",
+                  "label", "label_type", "source", "verified"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root / "cands.csv",
+                        [{"pair_id": "BRI1_BAK1_full", "label": "1", "verified": "yes",
+                          "label_type": "calibration", "gene_a": "BRI1", "gene_b": "BAK1",
+                          "acc_a": "", "acc_b": "", "range_a": "", "range_b": "",
+                          "source": "benchmark control"},
+                         {"pair_id": "BRI1_BAK1_domains", "label": "1", "verified": "yes",
+                          "label_type": "calibration", "gene_a": "BRI1", "gene_b": "BAK1",
+                          "acc_a": "", "acc_b": "", "range_a": "", "range_b": "",
+                          "source": "benchmark control"}],
+                        fields)
+            self._write(root / "scores.csv",
+                        [{"pair_id": "BRI1_BAK1_full", "iptm": "0.38",
+                          "min_chain_pair_pae": "18.0"},
+                         {"pair_id": "BRI1_BAK1_domains", "iptm": "0.90",
+                          "min_chain_pair_pae": "4.0"}],
+                        ["pair_id", "iptm", "min_chain_pair_pae"])
+            code = cli.main(["evaluate", "--candidates", str(root / "cands.csv"),
+                             "--results", str(root / "scores.csv"),
+                             "--out", str(root / "report")])
+        self.assertEqual(code, 0)
+
     def test_verified_labels_produce_a_report(self):
         fields = ["pair_id", "gene_a", "gene_b", "acc_a", "acc_b", "range_a", "range_b",
                   "label", "label_type", "source", "verified"]

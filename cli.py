@@ -146,6 +146,12 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
               "--allow-unverified for a dry run", file=sys.stderr)
         return 2
 
+    if not joined and calibration:
+        _report_calibration(calibration)
+        print("\ncalibration only: no verified benchmark pairs yet, so no metrics were computed.")
+        print("add labelled pairs in candidates.csv, or verify the existing ones, then rerun.")
+        return 0
+
     if not joined:
         print("no overlapping pairs between candidates.csv and the results file", file=sys.stderr)
         return 1
@@ -160,12 +166,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     paths = report.write_report(joined, summary, Path(args.out), args.threshold, note)
 
     if calibration:
-        print("calibration pairs (excluded from metrics):")
-        for entry in sorted(calibration, key=lambda e: -e["score"]):
-            print(f"  {entry['pair_id']}: ipTM {entry['score']:.3f}")
-        if len(calibration) >= 2:
-            print("  expected: truncated domains score clearly above full-length; "
-                  "if they do not, stop and check the constructs")
+        _report_calibration(calibration)
 
     print(f"{len(joined)} benchmark pairs ({sum(labels)} positive)")
     for name in ("auc", "recall_top", "precision_at_threshold"):
@@ -234,6 +235,32 @@ def cmd_demo(args: argparse.Namespace) -> int:
                                    fraction=0.25, allow_unverified=True,
                                    note="Synthetic demonstration data, not real predictions.")
     return cmd_evaluate(namespace)
+
+
+def _report_calibration(calibration: list[dict]) -> None:
+    """Show calibration scores and check the expected full-length versus domain gap."""
+    print("calibration pairs (excluded from metrics):")
+    for entry in sorted(calibration, key=lambda e: -e["score"]):
+        print(f"  {entry['pair_id']}: ipTM {entry['score']:.3f}")
+
+    if len(calibration) < 2:
+        print("  one calibration pair is enough to confirm the pipeline runs; two are "
+              "needed to check the full-length versus domain gap")
+        return
+
+    full = next((e for e in calibration if "full" in e["pair_id"].lower()), None)
+    truncated = next((e for e in calibration if "domain" in e["pair_id"].lower()), None)
+    if full and truncated:
+        gap = truncated["score"] - full["score"]
+        print(f"  gap (domains - full-length): {gap:+.3f}")
+        if gap >= 0.2:
+            print("  behaves as expected: the truncated construct scores clearly higher")
+        elif gap > -0.05:
+            print("  inconclusive: the expected gap did not appear; check that range_a/range_b "
+                  "cover the interacting domains and not the disordered flanks")
+        else:
+            print("  unexpected: full-length scored higher than the truncated construct; "
+                  "verify the domain boundaries before trusting anything downstream")
 
 
 def _float_or_none(value) -> float | None:
