@@ -47,12 +47,30 @@ disk with no server.
 
 ## Deploy
 
+The repository root is configured to deploy, so either folder works:
+
 ```bash
-cd site
-npx vercel login          # once
-npx vercel --prod         # deploy
+npx vercel login          # once, if the CLI reports an invalid token
+npx vercel --prod         # from the repository root
 ```
 
-Deploy from inside `site/`, not from the repository root — the root still contains
-the Python files that trigger the detection error. Vercel serves `index.html`
-directly; no framework preset, build command or `vercel.json` is needed.
+Two files make the root work, and both matter:
+
+- `vercel.json` pins `"framework": null` and rewrites `/` to `site/index.html`,
+  so the Python harness is no longer mistaken for a Python web app. There is no
+  build step: the page is already built when it is committed.
+- `.vercelignore` keeps the Python sources, tests, data and demo out of the
+  upload, which is both faster and a guarantee that none of it can be served.
+
+Deploying from inside `site/` also works and needs no configuration, because that
+folder contains only `index.html`.
+
+### The two errors people hit
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `[PYTHON_ENTRYPOINT_NOT_FOUND]` | Deployed a folder with `*.py` and `requirements.txt` but no `app.py`/`api/index.py`, so Vercel tried to run it as a Python web app | Root now has `vercel.json`; or deploy from `site/` |
+| `The specified token is not valid` | Expired CLI session, not a project problem | `npx vercel login` |
+
+After a deploy, open the production URL and confirm the page renders: a 200 alone
+is not proof, since a rewrite can succeed while the asset is missing.

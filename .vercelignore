@@ -1,0 +1,20 @@
+# Keep the deployment to the static page. Nothing here is served by the site,
+# and leaving it out stops Vercel mistaking the repository for a Python app.
+*.py
+requirements.txt
+pyproject.toml
+__pycache__/
+tests/
+data/
+batches/
+results/
+demo/
+docs/
+ppi/
+.state/
+.vercel/
+site/build.py
+site/README.md
+.pytest_cache/
+.github/
+.git/
