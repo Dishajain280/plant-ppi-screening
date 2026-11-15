@@ -1,5 +1,9 @@
 # plant-ppi-screening
 
+[![tests](https://github.com/Dishajain280/plant-ppi-screening/actions/workflows/ci.yml/badge.svg)](https://github.com/Dishajain280/plant-ppi-screening/actions/workflows/ci.yml)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![license](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+
 A reproducible harness for screening plant protein–protein interactions with
 structure-prediction models. It takes a curated candidate list, resolves the
 proteins, builds AlphaFold Server batch files within the free quota, parses the
@@ -11,6 +15,10 @@ have not been run yet, so this repository contains no biological result.** The
 figure below is synthetic demo output, generated to prove the pipeline works.
 
 ![Ranked screening scores, demo data](demo/report/figure.svg)
+
+Method, metric definitions and the honest limitations are in
+[docs/method.md](docs/method.md). CI runs the test suite and this demo on every
+push, across Python 3.10–3.12.
 
 ## Why this exists
 
@@ -103,14 +111,17 @@ Two naming traps this repository documents, both found by running it:
 ## Repository layout
 
 ```
-cli.py               resolve | batch | ingest | evaluate | demo
-ppi/uniprot.py       symbol resolution, FASTA cache, sequence slicing
-ppi/batch.py         token budgeting, chunking, daily quota tracking
-ppi/results.py       parse summary confidences into a scores table
-ppi/metrics.py       AUC, recall in the top slice, precision, bootstrap CIs
-ppi/report.py        markdown table and dependency-free SVG figure
-data/candidates.csv  curated pairs with sources and verification flags
-tests/               26 offline tests, no network required
+cli.py                   resolve | batch | ingest | evaluate | demo
+ppi/uniprot.py           symbol resolution, FASTA cache, sequence slicing
+ppi/batch.py             token budgeting, chunking, daily quota tracking
+ppi/results.py           parse summary confidences into a scores table
+ppi/metrics.py           AUC, recall in the top slice, precision, bootstrap CIs
+ppi/report.py            markdown table and dependency-free SVG figure
+data/candidates.csv      curated pairs with sources and verification flags
+docs/method.md           protocol, metric definitions, limitations
+tests/                   26 offline tests, no network required
+.github/workflows/ci.yml tests plus the demo, on every push
+CITATION.cff             citation metadata (GitHub "Cite this repository")
 ```
 
 ## Limits

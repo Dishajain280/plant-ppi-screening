@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "plant-ppi-screening: a harness for structural screening of plant protein-protein interactions"
+abstract: >-
+  Converts a curated list of candidate plant protein pairs into AlphaFold Server
+  batch jobs within the free daily quota and token limit, parses the returned
+  interface confidence metrics, and scores the resulting ranking against known
+  positives and explicit negatives. Includes an integrity guard that refuses to
+  report metrics while any label remains unverified.
+authors:
+  - family-names: Pirodiya
+    given-names: Disha
+    email: dishapirodiya@gmail.com
+    affiliation: "University Institute of Technology, RGPV, Bhopal, India"
+version: 0.1.0
+date-released: 2026-11-16
+license: MIT
+url: "https://github.com/Dishajain280/plant-ppi-screening"
+repository-code: "https://github.com/Dishajain280/plant-ppi-screening"
+keywords:
+  - protein-protein interaction
+  - structural biology
+  - AlphaFold
+  - plant genomics
+  - reproducibility
+  - bioinformatics
