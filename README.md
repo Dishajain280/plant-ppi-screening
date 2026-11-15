@@ -10,9 +10,10 @@ proteins, builds AlphaFold Server batch files within the free quota, parses the
 returned confidence metrics, and scores the ranking against known positives and
 honest negatives.
 
-**Status: the harness is complete and tested (26 unit tests). The predictions
-have not been run yet, so this repository contains no biological result.** The
-figure below is synthetic demo output, generated to prove the pipeline works.
+**Status: the harness is complete and tested (35 unit tests). The predictions have
+not been run yet, so this repository contains no biological result.** The figure
+below is synthetic demo output, generated to prove the pipeline works. What remains,
+and how long it takes, is in [ROADMAP.md](ROADMAP.md).
 
 ![Ranked screening scores, demo data](demo/report/figure.svg)
 
