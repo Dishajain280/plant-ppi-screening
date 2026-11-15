@@ -1,0 +1,13 @@
+pair_id,gene_a,gene_b,acc_a,acc_b,range_a,range_b,label,label_type,source,verified
+BRI1_BAK1_domains,BRI1,BAK1,,,,,1,demo,synthetic,no
+VIP1_BZIP29,VIP1,BZIP29,,,,,1,demo,synthetic,no
+BZIP29_BZIP30,BZIP29,BZIP30,,,,,1,demo,synthetic,no
+VIP1_AGB1,VIP1,AGB1,,,,,1,demo,synthetic,no
+BZIP30_AGB1,BZIP30,AGB1,,,,,1,demo,synthetic,no
+VIP1_BZIP30,VIP1,BZIP30,,,,,1,demo,synthetic,no
+BRI1_VIP1,BRI1,VIP1,,,,,0,demo,synthetic,no
+BAK1_VIP1,BAK1,VIP1,,,,,0,demo,synthetic,no
+BRI1_BZIP29,BRI1,BZIP29,,,,,0,demo,synthetic,no
+AGB1_GAPDH,AGB1,GAPDH,,,,,0,demo,synthetic,no
+BZIP29_NPR1,BZIP29,NPR1,,,,,0,demo,synthetic,no
+VIP1_RCN1,VIP1,RCN1,,,,,0,demo,synthetic,no

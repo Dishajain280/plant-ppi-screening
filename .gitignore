@@ -1,0 +1,16 @@
+# UniProt lookups and downloaded sequences are reproducible; keep them out of git
+.cache/
+data/sequences/
+
+# Generated batch files depend on the candidate list
+batches/
+
+# Downloaded model outputs are large and licensed, not redistributable
+results/
+
+# Local quota bookkeeping
+.state/
+
+__pycache__/
+*.pyc
+.DS_Store

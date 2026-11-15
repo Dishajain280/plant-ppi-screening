@@ -1,0 +1,9 @@
+pair_id,gene_a,gene_b,acc_a,acc_b,range_a,range_b,label,label_type,source,verified
+BRI1_BAK1_full,BRI1,BAK1,,,1-1196,1-615,1,positive_curated,"Brassinosteroid receptor and co-receptor; the standard positive control in plant structural benchmarks",yes
+BRI1_BAK1_domains,BRI1,BAK1,,,1-150,1-200,1,positive_curated,"Same pair truncated to the interacting extracellular domains; rerun after full-length calibration",no
+VIP1_AGB1,VIP1,AGB1,Q9MA75,P49177,,,1,positive_curated,"Heterotrimeric G-protein beta subunit AGB1 with the VIP1 transcription factor; confirm in the Tsugama lab papers before scoring",no
+VIP1_BZIP29,VIP1,BZIP29,Q9MA75,,,,1,positive_curated,"Group I bZIP heterodimerisation hypothesis; no verified source yet",no
+BZIP29_BZIP30,BZIP29,BZIP30,,,,,1,positive_curated,"Group I bZIP heterodimerisation hypothesis; no verified source yet",no
+BRI1_VIP1,BRI1,VIP1,,Q9MA75,,,0,decoy_localization,"Decoy: plasma-membrane receptor kinase versus nuclear/cytoplasmic transcription factor",yes
+BAK1_VIP1,BAK1,VIP1,,Q9MA75,,,0,decoy_localization,"Decoy: membrane co-receptor versus nuclear/cytoplasmic transcription factor",yes
+BRI1_BZIP29,BRI1,BZIP29,,,,,0,decoy_localization,"Decoy: membrane receptor kinase versus nuclear transcription factor",yes
