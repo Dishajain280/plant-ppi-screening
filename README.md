@@ -36,6 +36,7 @@ decorative.
 
 ```bash
 python cli.py resolve            # gene symbols -> UniProt accessions + FASTA
+python cli.py check-labels       # validate the label file before spending quota
 python cli.py batch              # candidate pairs  -> batches/batch_001.json
 # upload batches/*.json at https://alphafoldserver.com, download the outputs
 python cli.py ingest --results results/
@@ -117,9 +118,11 @@ ppi/uniprot.py           symbol resolution, FASTA cache, sequence slicing
 ppi/batch.py             token budgeting, chunking, daily quota tracking
 ppi/results.py           parse summary confidences into a scores table
 ppi/metrics.py           AUC, recall in the top slice, precision, bootstrap CIs
+ppi/curate.py            label validation: duplicates, placeholders, decoy share
 ppi/report.py            markdown table and dependency-free SVG figure
 data/candidates.csv      curated pairs with sources and verification flags
 docs/method.md           protocol, metric definitions, limitations
+docs/curating-labels.md  seven-step protocol for building a verified label set
 docs/running-predictions.md  upload, quota, download and scoring runbook
 tests/                   26 offline tests, no network required
 .github/workflows/ci.yml tests plus the demo, on every push

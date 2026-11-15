@@ -17,7 +17,7 @@ import json
 import sys
 from pathlib import Path
 
-from ppi import batch, metrics, report, results, uniprot
+from ppi import batch, curate, metrics, report, results, uniprot
 
 ROOT = Path(__file__).resolve().parent
 DATA = ROOT / "data"
@@ -113,7 +113,7 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     rows = _read_csv(Path(args.candidates))
     scores = {r["pair_id"]: r for r in results.read_scores(Path(args.results))}
 
-    joined, unverified = [], []
+    joined, unverified, calibration = [], [], []
     for row in rows:
         scored = scores.get(row["pair_id"])
         if not scored:
@@ -124,14 +124,19 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
             continue
         if score != score:
             continue
-        if row.get("verified", "").strip().lower() != "yes":
-            unverified.append(row["pair_id"])
-        joined.append({
+        entry = {
             "pair_id": row["pair_id"],
             "label": int(float(row["label"])),
             "score": score,
             "min_chain_pair_pae": _float_or_none(scored.get("min_chain_pair_pae")),
-        })
+        }
+        # Calibration pairs validate the pipeline; they must never enter the metrics.
+        if (row.get("label_type") or "").strip() == curate.CALIBRATION:
+            calibration.append(entry)
+            continue
+        if row.get("verified", "").strip().lower() != "yes":
+            unverified.append(row["pair_id"])
+        joined.append(entry)
 
     if unverified and not args.allow_unverified:
         print("refusing to score: these pairs are marked unverified in candidates.csv:", file=sys.stderr)
@@ -154,11 +159,49 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
             "Includes unverified labels; treat as a dry run, not a result."
     paths = report.write_report(joined, summary, Path(args.out), args.threshold, note)
 
-    print(f"{len(joined)} pairs ({sum(labels)} positive)")
+    if calibration:
+        print("calibration pairs (excluded from metrics):")
+        for entry in sorted(calibration, key=lambda e: -e["score"]):
+            print(f"  {entry['pair_id']}: ipTM {entry['score']:.3f}")
+        if len(calibration) >= 2:
+            print("  expected: truncated domains score clearly above full-length; "
+                  "if they do not, stop and check the constructs")
+
+    print(f"{len(joined)} benchmark pairs ({sum(labels)} positive)")
     for name in ("auc", "recall_top", "precision_at_threshold"):
         if name in summary:
             print(f"  {name}: {summary[name]}")
     print(f"  wrote {paths[0]} and {paths[1]}")
+    return 0
+
+
+def cmd_check_labels(args: argparse.Namespace) -> int:
+    """Validate the candidate list before any predictions are scored."""
+    path = Path(args.candidates)
+    if not path.exists():
+        fallback = CANDIDATES
+        print(f"  note: {path} not found, checking {fallback.name} instead")
+        path = fallback
+    rows = _read_csv(path)
+    counts = curate.summary(rows)
+    print(f"{path.name}: {counts['pairs']} pairs | {counts['positives']} positive | "
+          f"{counts['negatives']} negative ({counts['decoys']} decoys, "
+          f"{counts['curated_negatives']} curated) | {counts['verified']} verified | "
+          f"{counts['calibration']} calibration")
+
+    findings = curate.validate(rows, min_pairs=args.min_pairs)
+    errors = [f for f in findings if f.level == "error"]
+    warnings = [f for f in findings if f.level == "warning"]
+    for finding in errors + warnings:
+        print(f"  {finding}")
+
+    if errors:
+        print("fix the errors above before running predictions")
+        return 1
+    if warnings:
+        print("warnings only: scoring will run, but read them before trusting the numbers")
+    else:
+        print("label file looks consistent")
     return 0
 
 
@@ -228,6 +271,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note", default=None)
     p.add_argument("--allow-unverified", action="store_true")
     p.set_defaults(func=cmd_evaluate)
+
+    p = sub.add_parser("check-labels", help="validate the candidate list before scoring")
+    p.add_argument("--candidates", default=str(CANDIDATES))
+    p.add_argument("--min-pairs", type=int, default=15)
+    p.set_defaults(func=cmd_check_labels)
 
     p = sub.add_parser("demo", help="offline end-to-end run on synthetic scores")
     p.set_defaults(func=cmd_demo)

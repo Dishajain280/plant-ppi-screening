@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import cli  # noqa: E402  (also exercises the import path)
-from ppi import batch, metrics, report, results, uniprot  # noqa: E402
+from ppi import batch, curate, metrics, report, results, uniprot  # noqa: E402
 
 
 class TestMetrics(unittest.TestCase):
@@ -238,6 +238,69 @@ class TestReport(unittest.TestCase):
                 {"pair_id": "high", "label": 1, "score": 0.9, "min_chain_pair_pae": 3.0}]
         table = report.markdown_table(rows)
         self.assertLess(table.index("high"), table.index("low"))
+
+
+class TestCurate(unittest.TestCase):
+    @staticmethod
+    def _row(**overrides) -> dict:
+        row = {"pair_id": "p1", "gene_a": "A", "gene_b": "B", "acc_a": "", "acc_b": "",
+               "label": "1", "label_type": "positive_curated",
+               "source": "Author et al. (2020) Plant Cell, Y2H; PMID 12345678",
+               "verified": "yes"}
+        row.update(overrides)
+        return row
+
+    def _errors(self, rows, **kwargs):
+        return [f for f in curate.validate(rows, **kwargs) if f.level == "error"]
+
+    def _warnings(self, rows, **kwargs):
+        return [f for f in curate.validate(rows, **kwargs) if f.level == "warning"]
+
+    def test_clean_rows_pass(self):
+        rows = [self._row(pair_id="p1", gene_b="B"),
+                self._row(pair_id="p2", gene_a="C", gene_b="D", label="0",
+                          label_type="decoy_localization")]
+        self.assertEqual(self._errors(rows), [])
+
+    def test_reversed_pair_is_rejected(self):
+        rows = [self._row(pair_id="p1", gene_a="VIP1", gene_b="BZIP29"),
+                self._row(pair_id="p2", gene_a="BZIP29", gene_b="VIP1")]
+        messages = " ".join(f.message for f in self._errors(rows))
+        self.assertIn("already listed", messages)
+
+    def test_duplicate_pair_id_is_rejected(self):
+        rows = [self._row(pair_id="same"), self._row(pair_id="same", gene_a="C", gene_b="D")]
+        self.assertTrue(any("duplicate pair_id" in f.message for f in self._errors(rows)))
+
+    def test_placeholder_source_is_flagged(self):
+        rows = [self._row(source="TODO")]
+        self.assertTrue(any("no source recorded" in f.message for f in self._warnings(rows)))
+
+    def test_label_type_mismatch_is_an_error(self):
+        rows = [self._row(label="0", label_type="positive_curated")]
+        self.assertTrue(any("curated positive" in f.message for f in self._errors(rows)))
+
+    def test_decoy_heavy_file_is_flagged(self):
+        rows = [self._row(pair_id=f"d{i}", gene_a=f"X{i}", gene_b=f"Y{i}", label="0",
+                          label_type="decoy_localization") for i in range(5)]
+        rows.append(self._row(pair_id="pos", gene_a="P", gene_b="Q"))
+        self.assertTrue(any("decoys" in f.message for f in self._warnings(rows)))
+
+    def test_small_file_warns_about_interval_width(self):
+        rows = [self._row(pair_id="a"), self._row(pair_id="b", gene_a="C", gene_b="D")]
+        self.assertTrue(any("confidence interval" in f.message for f in self._warnings(rows)))
+
+    def test_cli_reports_errors(self):
+        fields = ["pair_id", "gene_a", "gene_b", "acc_a", "acc_b", "range_a", "range_b",
+                  "label", "label_type", "source", "verified"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cands.csv"
+            with path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fields)
+                writer.writeheader()
+                writer.writerow(self._row(label="7"))
+            code = cli.main(["check-labels", "--candidates", str(path)])
+        self.assertEqual(code, 1)
 
 
 class TestEvaluateGuard(unittest.TestCase):

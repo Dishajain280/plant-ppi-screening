@@ -2,8 +2,9 @@
 .cache/
 data/sequences/
 
-# Generated batch files depend on the candidate list
+# Generated batch files and the resolved candidate list are derived artifacts
 batches/
+data/resolved.csv
 
 # Downloaded model outputs are large and licensed, not redistributable
 results/
