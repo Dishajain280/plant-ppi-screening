@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>plant-ppi-screening — structural screening harness</title>
+<meta name="description" content="A harness for screening plant protein-protein interactions with structure prediction: batching, confidence parsing and ranking metrics.">
+<style>
+  :root { --ink:#1f2328; --muted:#59636e; --line:#d8dee4; --wash:#f6f8fa;
+           --green:#1a7f37; --amber:#9a6700; --amber-wash:#fff8e5; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fff; color:var(--ink);
+          font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+          line-height:1.55; font-size:16px; }
+  .wrap { max-width:880px; margin:0 auto; padding:56px 24px 80px; }
+  header h1 { font-size:30px; letter-spacing:-0.02em; margin:0 0 10px; }
+  .lede { font-size:17px; color:var(--muted); margin:0 0 18px; max-width:62ch; }
+  .pill { display:inline-block; background:var(--amber-wash); color:var(--amber);
+           border:1px solid #e6d5a8; border-radius:999px; padding:4px 12px;
+           font-size:13px; font-weight:600; }
+  nav { margin-top:18px; font-size:14px; }
+  nav a { color:#0b5cad; text-decoration:none; margin-right:16px; }
+  nav a:hover { text-decoration:underline; }
+  h2 { font-size:14px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
+        margin:44px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }
+  p { margin:0 0 12px; }
+  ol, ul { margin:0 0 12px; padding-left:20px; }
+  li { margin-bottom:6px; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px;
+          background:var(--wash); padding:1px 5px; border-radius:4px; }
+  .fig { border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff;
+          overflow-x:auto; }
+  .fig svg { display:block; width:100%; height:auto; }
+  .tag { font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
+          color:var(--amber); background:var(--amber-wash); border-radius:4px;
+          padding:2px 7px; margin-left:8px; vertical-align:middle; }
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+              gap:10px; margin:14px 0 18px; }
+  .metric { border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+             background:var(--wash); }
+  .metric-name { display:block; font-size:12px; text-transform:uppercase;
+                  letter-spacing:0.05em; color:var(--muted); }
+  .metric-value { display:block; font-size:20px; font-weight:600;
+                   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin:8px 0 4px; }
+  th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
+        color:var(--muted); border-bottom:1px solid var(--line); padding:8px 10px; }
+  td { border-bottom:1px solid var(--wash); padding:8px 10px; }
+  td.num { text-align:right; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  tbody tr:hover { background:var(--wash); }
+  .note { font-size:13.5px; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:640px) { .grid { grid-template-columns:1fr; } .wrap { padding:36px 18px 60px; } }
+  footer { margin-top:56px; border-top:1px solid var(--line); padding-top:16px;
+            font-size:13px; color:var(--muted); }
+  a { color:#0b5cad; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>plant-ppi-screening</h1>
+  <p class="lede">A harness for screening plant protein–protein interactions with
+  structure prediction: resolve the proteins, batch the jobs within a free quota,
+  parse the confidence metrics, and score the ranking against known positives and
+  honest negatives.</p>
+  <span class="pill">Harness complete · predictions not yet run</span>
+  <nav>
+    <a href="https://github.com/Dishajain280/plant-ppi-screening">Repository</a>
+    <a href="https://github.com/Dishajain280/plant-ppi-screening/blob/main/docs/method.md">Method</a>
+    <a href="https://github.com/Dishajain280/plant-ppi-screening/blob/main/docs/curating-labels.md">Label protocol</a>
+    <a href="https://github.com/Dishajain280/plant-ppi-screening/blob/main/docs/running-predictions.md">Runbook</a>
+  </nav>
+</header>
+
+<h2>The problem</h2>
+<p>Finding an interaction by yeast two-hybrid or BiFC costs weeks per pair, so a
+transcription factor family cannot be screened that way. Structure prediction
+reverses the order of work: rank hundreds of pairs cheaply, then spend bench time on
+the top few percent. On plant proteins the naive version fails quietly — few
+structures are solved, alignments are thin, and disordered regions drag every
+confidence score down. A pipeline that submits full-length sequences and sorts by
+pLDDT looks confident and is wrong.</p>
+
+<h2>What the harness does</h2>
+<ol>
+  <li><code>resolve</code> — gene symbols to UniProt entries, with a synonym fallback
+      and explicit accession pinning for ambiguous symbols.</li>
+  <li><code>check-labels</code> — rejects duplicate pairs, placeholder sources, and a
+      negative class that is mostly easy decoys.</li>
+  <li><code>batch</code> — jobs within the 30-per-day quota and the 5,000-token cap;
+      over-budget pairs are skipped with a printed reason.</li>
+  <li><code>ingest</code> / <code>evaluate</code> — ipTM and chain-pair PAE into a
+      ranked table, AUC with bootstrap intervals, calibration gap reported separately.</li>
+</ol>
+
+<h2>Demo output <span class="tag">synthetic</span></h2>
+<div class="fig"><svg xmlns="http://www.w3.org/2000/svg" width="720" height="320" viewBox="0 0 720 320" font-family="Helvetica, Arial, sans-serif">
+<rect width="720" height="320" fill="#ffffff"/>
+<text x="56" y="16" font-size="13" font-weight="bold" fill="#1f2328">Ranked interaction scores</text>
+<line x1="56" y1="276" x2="700" y2="276" stroke="#d0d7de"/>
+<line x1="56" y1="24" x2="56" y2="276" stroke="#d0d7de"/>
+<line x1="56" y1="276.0" x2="700" y2="276.0" stroke="#f0f3f6"/>
+<text x="48" y="280.0" font-size="10" fill="#59636e" text-anchor="end">0.12</text>
+<line x1="56" y1="150.0" x2="700" y2="150.0" stroke="#f0f3f6"/>
+<text x="48" y="154.0" font-size="10" fill="#59636e" text-anchor="end">0.52</text>
+<line x1="56" y1="24.0" x2="700" y2="24.0" stroke="#f0f3f6"/>
+<text x="48" y="28.0" font-size="10" fill="#59636e" text-anchor="end">0.91</text>
+<line x1="56" y1="122.9" x2="700" y2="122.9" stroke="#b54708" stroke-dasharray="5 4"/>
+<text x="700" y="117.9" font-size="10" fill="#b54708" text-anchor="end">threshold 0.60</text>
+<circle cx="82.8" cy="24.0" r="4.5" fill="#1a7f37"/>
+<circle cx="136.5" cy="65.5" r="4.5" fill="#1a7f37"/>
+<circle cx="190.2" cy="78.2" r="4.5" fill="#1a7f37"/>
+<circle cx="243.8" cy="94.2" r="4.5" fill="#1a7f37"/>
+<circle cx="297.5" cy="103.7" r="4.5" fill="#1a7f37"/>
+<circle cx="351.2" cy="113.3" r="4.5" fill="#1a7f37"/>
+<circle cx="404.8" cy="183.5" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<circle cx="458.5" cy="209.0" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<circle cx="512.2" cy="225.0" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<circle cx="565.8" cy="244.1" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<circle cx="619.5" cy="253.7" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<circle cx="673.2" cy="276.0" r="4" fill="none" stroke="#8250df" stroke-width="1.6"/>
+<text x="378.0" y="308" font-size="10" fill="#59636e" text-anchor="middle">pairs, ranked by ipTM (green filled = known interactor, purple hollow = negative)</text>
+</svg></div>
+<p class="note">Synthetic scores, generated to prove the pipeline runs end to end.
+No AlphaFold job has been submitted, so this page reports no biological result.</p>
+<div class="metrics"><div class="metric"><span class="metric-name">auc</span><span class="metric-value">1.000 (95% CI 1.000-1.000)</span></div>
+<div class="metric"><span class="metric-name">recall_top</span><span class="metric-value">0.500</span></div>
+<div class="metric"><span class="metric-name">n_pairs</span><span class="metric-value">12</span></div>
+<div class="metric"><span class="metric-name">n_positive</span><span class="metric-value">6</span></div>
+<div class="metric"><span class="metric-name">precision_at_threshold</span><span class="metric-value">1.000</span></div></div>
+<table><thead><tr><th>Rank</th><th>Pair</th><th>Label</th><th>ipTM</th><th>min chain-pair PAE (A)</th></tr></thead><tbody><tr><td class="num">1</td><td class="">BRI1_BAK1_domains</td><td class="">positive</td><td class="num">0.910</td><td class="num">7.25</td></tr><tr><td class="num">2</td><td class="">VIP1_BZIP29</td><td class="">positive</td><td class="num">0.780</td><td class="num">10.50</td></tr><tr><td class="num">3</td><td class="">BZIP29_BZIP30</td><td class="">positive</td><td class="num">0.740</td><td class="num">11.50</td></tr><tr><td class="num">4</td><td class="">VIP1_AGB1</td><td class="">positive</td><td class="num">0.690</td><td class="num">12.75</td></tr><tr><td class="num">5</td><td class="">BZIP30_AGB1</td><td class="">positive</td><td class="num">0.660</td><td class="num">13.50</td></tr><tr><td class="num">6</td><td class="">VIP1_BZIP30</td><td class="">positive</td><td class="num">0.630</td><td class="num">14.25</td></tr><tr><td class="num">7</td><td class="">BRI1_VIP1</td><td class="">negative</td><td class="num">0.410</td><td class="num">19.75</td></tr><tr><td class="num">8</td><td class="">BAK1_VIP1</td><td class="">negative</td><td class="num">0.330</td><td class="num">21.75</td></tr><tr><td class="num">9</td><td class="">BRI1_BZIP29</td><td class="">negative</td><td class="num">0.280</td><td class="num">23.00</td></tr><tr><td class="num">10</td><td class="">AGB1_GAPDH</td><td class="">negative</td><td class="num">0.220</td><td class="num">24.50</td></tr><tr><td class="num">11</td><td class="">BZIP29_NPR1</td><td class="">negative</td><td class="num">0.190</td><td class="num">25.25</td></tr><tr><td class="num">12</td><td class="">VIP1_RCN1</td><td class="">negative</td><td class="num">0.120</td><td class="num">27.00</td></tr></tbody></table>
+
+<h2>Label set status</h2>
+<p class="note">6 benchmark pairs, 2 calibration pairs,
+4 of 8 rows verified. The evaluator refuses to compute metrics
+while any included pair remains unverified.</p>
+<table><thead><tr><th>Pair</th><th>Label class</th><th>Verified</th></tr></thead><tbody><tr><td>VIP1_AGB1</td><td>positive_curated</td><td>no</td></tr><tr><td>VIP1_BZIP29</td><td>positive_curated</td><td>no</td></tr><tr><td>BZIP29_BZIP30</td><td>positive_curated</td><td>no</td></tr><tr><td>BRI1_VIP1</td><td>decoy_localization</td><td>yes</td></tr><tr><td>BAK1_VIP1</td><td>decoy_localization</td><td>yes</td></tr><tr><td>BRI1_BZIP29</td><td>decoy_localization</td><td>yes</td></tr></tbody></table>
+
+<h2>Next steps</h2>
+<div class="grid">
+  <div>
+    <p><strong>Done.</strong> Resolution, validation, batching, parsing, ranking
+    metrics, a dependency-free figure, and 36 offline tests running in CI on every push.</p>
+  </div>
+  <div>
+    <p><strong>Not done.</strong> The predictions. Labels need literature
+    verification, and the server accepts jobs only by hand at 30 a day.</p>
+  </div>
+</div>
+
+<footer>
+  Generated from <code>demo/report/report.md</code> by <code>site/build.py</code> ·
+  MIT licensed · Disha Pirodiya ·
+  <a href="https://github.com/Dishajain280/plant-ppi-screening">github.com/Dishajain280/plant-ppi-screening</a>
+</footer>
+</div>
+</body>
+</html>

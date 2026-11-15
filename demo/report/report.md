@@ -6,8 +6,8 @@
 
 - **auc**: 1.000 (95% CI 1.000-1.000)
 - **recall_top**: 0.500
-- **n_pairs**: 12.000
-- **n_positive**: 6.000
+- **n_pairs**: 12
+- **n_positive**: 6
 - **precision_at_threshold**: 1.000
 
 ## Ranked pairs

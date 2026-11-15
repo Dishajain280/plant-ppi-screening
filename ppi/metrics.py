@@ -17,10 +17,13 @@ class Metric:
     value: float
     low: float | None = None
     high: float | None = None
+    kind: str = "rate"  # "rate" keeps three decimals; "count" prints an integer
 
     def __str__(self) -> str:
         if math.isnan(self.value):
             return "n/a"
+        if self.kind == "count":
+            return f"{int(round(self.value))}"
         has_interval = (self.low is not None and self.high is not None
                         and not math.isnan(self.low) and not math.isnan(self.high))
         if not has_interval:
@@ -93,12 +96,12 @@ def summarise(scores: list[float], labels: list[int], fraction: float = 0.1,
     out = {
         "auc": Metric(point, low, high),
         "recall_top": Metric(recall),
-        "top_k": Metric(float(k)),
-        "n_pairs": Metric(float(len(scores))),
-        "n_positive": Metric(float(sum(labels))),
+        "top_k": Metric(float(k), kind="count"),
+        "n_pairs": Metric(float(len(scores)), kind="count"),
+        "n_positive": Metric(float(sum(labels)), kind="count"),
     }
     if threshold is not None:
         precision, selected = precision_at(scores, labels, threshold)
         out["precision_at_threshold"] = Metric(precision)
-        out["selected_at_threshold"] = Metric(float(selected))
+        out["selected_at_threshold"] = Metric(float(selected), kind="count")
     return out
