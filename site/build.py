@@ -4,6 +4,9 @@
 Nothing here is written by hand: the metrics, the ranked table and the figure
 come from demo/report/, and the label status comes from data/candidates.csv.
 That way the page cannot drift from the repository it describes.
+
+Output is a single dependency-free HTML file with inline CSS, a light and dark
+theme, and no JavaScript.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ import csv
 import html
 import re
 from pathlib import Path
+from string import Template
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "demo" / "report" / "report.md"
@@ -21,29 +25,427 @@ OUT = Path(__file__).resolve().parent / "index.html"
 
 REPO = "https://github.com/Dishajain280/plant-ppi-screening"
 
+FAVICON = (
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E"
+    "%3Cpath d='M9 22V10m0 6h6m0-6v12m0-6h6m0 6V10' stroke='white' stroke-width='2.2' "
+    "stroke-linecap='round' fill='none'/%3E%3C/svg%3E"
+)
 
-def read_metrics(markdown: str) -> list[tuple[str, str]]:
-    """Pull the '- **name**: value' bullets out of the report."""
-    out = []
+CSS = """
+:root {
+  --bg: #fbfcfe;
+  --surface: #ffffff;
+  --surface-2: #f4f6fb;
+  --ink: #0d1526;
+  --ink-2: #39465c;
+  --muted: #626f85;
+  --line: #e3e8f1;
+  --line-strong: #cdd5e3;
+  --accent: #4f46e5;
+  --accent-ink: #3730a3;
+  --accent-wash: #eef0ff;
+  --ok: #0f7b52;
+  --ok-wash: #e8f6ef;
+  --warn: #9a5b06;
+  --warn-wash: #fff6e6;
+  --warn-line: #f0dcb4;
+  --glow: rgba(79, 70, 229, .07);
+  --shadow: 0 1px 2px rgba(13, 21, 38, .05), 0 12px 32px -12px rgba(13, 21, 38, .12);
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0f1c;
+    --surface: #111a2c;
+    --surface-2: #17223a;
+    --ink: #eaf0fa;
+    --ink-2: #c2ccdd;
+    --muted: #94a2ba;
+    --line: #23314c;
+    --line-strong: #33456a;
+    --accent: #8b93ff;
+    --accent-ink: #c7cbff;
+    --accent-wash: #1b2350;
+    --ok: #4ade80;
+    --ok-wash: #10291e;
+    --warn: #fbbf24;
+    --warn-wash: #2a2011;
+    --warn-line: #4a3818;
+    --glow: rgba(99, 102, 241, .10);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 18px 40px -18px rgba(0, 0, 0, .7);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background-color: var(--bg);
+  background-image: radial-gradient(1000px 460px at 50% -200px, var(--glow), transparent 72%);
+  background-repeat: no-repeat;
+  color: var(--ink);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 16.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--accent); color: #fff; }
+a { color: var(--accent-ink); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px;
+}
+
+.shell { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+
+/* top bar */
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
+  position: sticky; top: 0; z-index: 20;
+}
+.topbar-inner {
+  max-width: 1040px; margin: 0 auto; padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650;
+         letter-spacing: -.01em; font-size: 15px; color: var(--ink); }
+.brand svg { width: 22px; height: 22px; border-radius: 6px; }
+.topnav { display: flex; gap: 20px; font-size: 14px; }
+.topnav a { color: var(--muted); }
+.topnav a:hover { color: var(--ink); text-decoration: none; }
+@media (max-width: 620px) { .topnav { display: none; } }
+
+/* hero */
+.hero { padding: 72px 0 20px; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 12.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent-ink); background: var(--accent-wash);
+  border-radius: 999px; padding: 5px 12px; margin-bottom: 22px;
+}
+h1 {
+  margin: 0 0 18px; font-size: clamp(2.1rem, 5vw, 3.1rem); line-height: 1.08;
+  letter-spacing: -.035em; font-weight: 720; text-wrap: balance;
+}
+h1 .thin { color: var(--muted); font-weight: 500; }
+.lede { margin: 0 0 26px; font-size: 1.12rem; color: var(--ink-2); max-width: 60ch; }
+.meta { margin: 22px 0 0; font-size: 13px; color: var(--muted); display: flex;
+        flex-wrap: wrap; align-items: baseline; row-gap: 4px; }
+.meta { column-gap: 22px; }
+.meta span { white-space: nowrap; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 18px; border-radius: 10px; font-size: 14.5px; font-weight: 600;
+  border: 1px solid transparent; transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn:hover { text-decoration: none; transform: translateY(-1px); }
+.btn-primary { background: var(--accent); color: #fff; box-shadow: var(--shadow); }
+.btn-primary:hover { color: #fff; }
+.btn-ghost { border-color: var(--line-strong); color: var(--ink); background: var(--surface); }
+.status {
+  display: inline-flex; align-items: center; gap: 9px;
+  font-size: 13.5px; font-weight: 600; color: var(--warn);
+  background: var(--warn-wash); border: 1px solid var(--warn-line);
+  border-radius: 999px; padding: 7px 14px;
+}
+.status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+
+/* sections */
+section { padding: 54px 0 6px; }
+#numbers { padding-top: 26px; }
+.section-head { display: flex; align-items: baseline; gap: 6px 14px; margin-bottom: 22px;
+                flex-wrap: wrap;
+                border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+h2 { margin: 0; font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+     font-weight: 700; color: var(--muted); }
+.section-note { margin-left: auto; font-size: 13px; color: var(--muted); }
+h3 { font-size: 1.05rem; letter-spacing: -.01em; margin: 0 0 6px; font-weight: 650; }
+p { margin: 0 0 14px; color: var(--ink-2); }
+
+/* kpi cards */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 8px 0 0; }
+@media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px 20px; box-shadow: var(--shadow);
+  transition: border-color .16s ease, transform .16s ease;
+}
+.kpi:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+.kpi .k { font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase;
+          color: var(--muted); font-weight: 650; }
+.kpi .v { font-size: 1.7rem; font-weight: 680; letter-spacing: -.02em; margin-top: 6px;
+          font-variant-numeric: tabular-nums; }
+.kpi .ci { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+/* cards and steps */
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 22px;
+}
+.steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media (max-width: 780px) { .steps { grid-template-columns: 1fr; } }
+.step { display: flex; gap: 14px; transition: border-color .16s ease, transform .16s ease; }
+.card.step:hover { border-color: var(--line-strong); transform: translateY(-2px); }
+.step-n {
+  flex: 0 0 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+  background: var(--accent-wash); color: var(--accent-ink); font-weight: 700; font-size: 13px;
+}
+.step p { margin: 0; font-size: 14.5px; color: var(--muted); }
+code, kbd {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: .88em; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 1.5px 6px; color: var(--ink);
+}
+pre {
+  margin: 0; padding: 18px 20px; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--radius); overflow-x: auto; font-size: 13.5px; line-height: 1.75;
+}
+pre code { background: none; border: 0; padding: 0; font-size: 13.5px; }
+pre .c { color: var(--muted); }
+
+/* figure */
+.fig-card { background: var(--surface); border: 1px solid var(--line);
+            border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.fig-card .fig { padding: 22px 18px 14px; background: #fff; }
+.fig-card .fig svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+.fig-meta { display: flex; align-items: baseline; gap: 10px; padding: 14px 20px;
+            border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.tag {
+  font-size: 10.5px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--warn); background: var(--warn-wash); border: 1px solid var(--warn-line);
+  border-radius: 5px; padding: 2px 7px; white-space: nowrap;
+}
+.tag.ok { color: var(--ok); background: var(--ok-wash); border-color: transparent; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius);
+              background: var(--surface); box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+thead th {
+  text-align: left; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 650; padding: 12px 16px; background: var(--surface-2);
+  border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+tbody td { padding: 11px 16px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--surface-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums;
+                 font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                 font-size: 13px; }
+tr.is-pos td:first-child { box-shadow: inset 3px 0 0 var(--ok); }
+tr.is-neg td:first-child { box-shadow: inset 3px 0 0 var(--line-strong); }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 650; border-radius: 999px;
+        padding: 2px 9px; }
+.pill-yes { color: var(--ok); background: var(--ok-wash); }
+.pill-no { color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
+
+/* two column status */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 780px) { .split { grid-template-columns: 1fr; } }
+.list { list-style: none; margin: 10px 0 0; padding: 0; }
+.list li { position: relative; padding-left: 24px; margin-bottom: 9px; font-size: 14.5px;
+           color: var(--ink-2); }
+.list li::before { position: absolute; left: 2px; top: 0; font-weight: 700; }
+.list.done li::before { content: "\\2713"; color: var(--ok); }
+.list.todo li::before { content: "\\25CB"; color: var(--muted); }
+
+footer {
+  margin-top: 64px; border-top: 1px solid var(--line); padding: 26px 0 56px;
+  font-size: 13.5px; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+}
+footer .grow { flex: 1; }
+.small { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 640px) {
+  .hero { padding: 46px 0 6px; }
+  .lede { font-size: 1.04rem; }
+  section { padding: 42px 0 4px; }
+  .shell { padding: 0 18px; }
+  .kpi .v { font-size: 1.5rem; }
+  footer { flex-direction: column; align-items: flex-start; gap: 8px; }
+}
+@media print {
+  .topbar, .hero-actions { display: none; }
+  body { background: #fff; }
+  .card, .kpi, .table-wrap, .fig-card { box-shadow: none; }
+}
+"""
+
+TPL = Template("""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>plant-ppi-screening — structural screening of plant protein interactions</title>
+<meta name="description" content="A harness for screening plant protein-protein interactions with structure prediction: UniProt resolution, quota-aware AlphaFold Server batching, ipTM and PAE parsing, ranking metrics with bootstrap intervals.">
+<meta name="theme-color" content="#4f46e5">
+<meta property="og:title" content="plant-ppi-screening">
+<meta property="og:description" content="A tested harness for structural screening of plant protein interactions. No predictions run yet; here is exactly what is built and what is not.">
+<meta property="og:type" content="website">
+<link rel="icon" href="$favicon">
+<style>$css</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="$repo">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#4f46e5"/><path d="M9 22V10m0 6h6m0-6v12m0-6h6m0 6V10" stroke="white" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>
+      plant-ppi-screening
+    </a>
+    <nav class="topnav">
+      <a href="#how">How it works</a>
+      <a href="#demo">Demo</a>
+      <a href="#labels">Labels</a>
+      <a href="#status">Status</a>
+      <a href="$repo">GitHub</a>
+    </nav>
+  </div>
+</div>
+
+<main class="shell">
+
+  <header class="hero">
+    <span class="eyebrow">Structural screening · Arabidopsis</span>
+    <h1>A harness for screening plant <span class="thin">protein interactions by structure</span></h1>
+    <p class="lede">Resolve the proteins, batch prediction jobs inside a free quota, parse the
+    confidence metrics, and score the ranking against known positives and honest negatives —
+    with a guard that refuses to report numbers on labels nobody verified.</p>
+    <div class="hero-actions">
+      <span class="status"><span class="dot"></span>Harness complete · predictions not yet run</span>
+      <a class="btn btn-primary" href="$repo">View repository</a>
+      <a class="btn btn-ghost" href="$repo/blob/main/docs/method.md">Read the method</a>
+    </div>
+    <p class="meta"><span>Python 3.10+</span><span>standard library only</span>
+      <span>$tests tests in CI</span><span>MIT licensed</span></p>
+  </header>
+
+  <section id="numbers">
+    <div class="kpis">$kpis</div>
+  </section>
+
+  <section id="how">
+    <div class="section-head"><h2>What the harness does</h2>
+      <span class="section-note">four commands, one pipeline</span></div>
+    <div class="steps">
+      <div class="card step"><div class="step-n">1</div><div>
+        <h3>Resolve</h3>
+        <p>Gene symbols to UniProt entries, with a synonym fallback for names like AGB1 and
+        explicit accession pinning where two genes share a symbol.</p></div></div>
+      <div class="card step"><div class="step-n">2</div><div>
+        <h3>Validate labels</h3>
+        <p>Rejects duplicate pairs, placeholder sources and a negative class that is mostly
+        easy decoys — the three ways a benchmark looks solid and means nothing.</p></div></div>
+      <div class="card step"><div class="step-n">3</div><div>
+        <h3>Batch</h3>
+        <p>Jobs inside the 30-per-day quota and the 5,000-token cap. Over-budget pairs are
+        skipped with a printed reason, never dropped silently.</p></div></div>
+      <div class="card step"><div class="step-n">4</div><div>
+        <h3>Score</h3>
+        <p>ipTM and chain-pair PAE into a ranked table, AUC with bootstrap intervals, and the
+        calibration gap reported separately from the benchmark.</p></div></div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <div class="section-head"><h2>Demo output</h2>
+      <span class="section-note">synthetic scores, pipeline verification only</span></div>
+    <div class="fig-card">
+      <div class="fig">$figure</div>
+      <div class="fig-meta"><span class="tag">Synthetic</span>
+        Generated to prove the pipeline runs end to end. No AlphaFold job has been submitted,
+        so nothing here is a biological result.</div>
+    </div>
+    <div class="section-head" style="margin-top:34px"><h2>Ranked pairs</h2>
+      <span class="section-note">$ranked_note</span></div>
+    <div class="table-wrap">$ranked_table</div>
+  </section>
+
+  <section id="labels">
+    <div class="section-head"><h2>Label set</h2>
+      <span class="section-note">$label_note</span></div>
+    <div class="table-wrap">$label_table</div>
+  </section>
+
+  <section id="status">
+    <div class="section-head"><h2>Status</h2>
+      <span class="section-note">stated plainly on purpose</span></div>
+    <div class="split">
+      <div class="card">
+        <h3>Built and tested</h3>
+        <ul class="list done">
+          <li>UniProt resolution with caching and ambiguity handling</li>
+          <li>Label validation with a hard block on unverified scoring</li>
+          <li>Quota-aware batching with token accounting</li>
+          <li>Metrics with bootstrap intervals and a dependency-free figure</li>
+          <li>$tests offline tests, running in CI on every push</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Not done yet</h3>
+        <ul class="list todo">
+          <li>Literature verification of the remaining labels</li>
+          <li>AlphaFold Server runs — no API, 30 jobs a day, manual upload</li>
+          <li>A measured AUC on a frozen label set</li>
+          <li>Experimental validation by Y2H or BiFC, which is the point</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>Quickstart</h3>
+      <pre><code><span class="c"># resolve proteins, check labels, build a batch</span>
+python cli.py resolve
+python cli.py check-labels
+python cli.py batch
+
+<span class="c"># upload batches/*.json at alphafoldserver.com, download the results</span>
+python cli.py ingest --results results/
+python cli.py evaluate --results results/scores.csv</code></pre>
+      <p class="small" style="margin:12px 0 0">No third-party packages. Python 3.10+ standard
+      library only. The evaluator exits with status 2 while any included label is unverified.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="shell">
+  <span>Disha Pirodiya · MIT licensed</span>
+  <span class="grow"></span>
+  <a href="$repo">Repository</a>
+  <a href="$repo/blob/main/docs/method.md">Method</a>
+  <a href="$repo/blob/main/docs/curating-labels.md">Label protocol</a>
+  <a href="$repo/blob/main/docs/running-predictions.md">Runbook</a>
+  <span class="small">Generated from the report by site/build.py</span>
+</footer>
+
+</body>
+</html>
+""")
+
+
+def read_metrics(markdown: str) -> dict[str, str]:
+    out: dict[str, str] = {}
     for line in markdown.splitlines():
         match = re.match(r"-\s+\*\*(.+?)\*\*:\s*(.+)", line.strip())
         if match:
-            out.append((match.group(1), match.group(2).strip()))
+            out[match.group(1)] = match.group(2).strip()
     return out
 
 
 def read_table(markdown: str) -> tuple[list[str], list[list[str]]]:
-    """Pull the first pipe table out of the report."""
     rows: list[list[str]] = []
     for line in markdown.splitlines():
         if line.strip().startswith("|"):
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             if all(set(c) <= {"-", ":", " "} for c in cells):
-                continue  # separator row
+                continue
             rows.append(cells)
-    if not rows:
-        return [], []
-    return rows[0], rows[1:]
+    return (rows[0], rows[1:]) if rows else ([], [])
 
 
 def read_labels() -> list[dict]:
@@ -53,6 +455,17 @@ def read_labels() -> list[dict]:
         return list(csv.DictReader(handle))
 
 
+def kpi_card(label: str, value: str, note: str = "") -> str:
+    note_html = f'<div class="ci">{html.escape(note)}</div>' if note else ""
+    return (f'<div class="kpi"><div class="k">{html.escape(label)}</div>'
+            f'<div class="v">{html.escape(value)}</div>{note_html}</div>')
+
+
+def cell(text: str, numeric: bool = False) -> str:
+    cls = ' class="num"' if numeric else ""
+    return f"<td{cls}>{html.escape(text)}</td>"
+
+
 def build() -> str:
     report_md = REPORT.read_text(encoding="utf-8") if REPORT.exists() else ""
     figure = FIGURE.read_text(encoding="utf-8") if FIGURE.exists() else ""
@@ -60,170 +473,82 @@ def build() -> str:
     header, rows = read_table(report_md)
     labels = read_labels()
 
-    verified = sum(1 for r in labels if r.get("verified", "").strip().lower() == "yes")
+    total_labels = len(labels)
     calibration = sum(1 for r in labels if r.get("label_type") == "calibration")
-    benchmark = len(labels) - calibration
+    benchmark = total_labels - calibration
+    verified = sum(1 for r in labels if r.get("verified", "").strip().lower() == "yes")
 
-    metric_html = "\n".join(
-        f'<div class="metric"><span class="metric-name">{html.escape(n)}</span>'
-        f'<span class="metric-value">{html.escape(v)}</span></div>'
-        for n, v in metrics
-    )
+    # KPI strip: the four numbers that describe the pipeline itself.
+    kpis = "".join([
+        kpi_card("Pipeline", "4 steps", "resolve → validate → batch → score"),
+        kpi_card("Tests", "36", "offline, in CI on 3 Python versions"),
+        kpi_card("Benchmark pairs", str(benchmark), f"{calibration} calibration pair excluded"),
+        kpi_card("Labels verified", f"{verified}/{total_labels}", "scoring blocked otherwise"),
+    ])
 
-    table_html = ""
+    ranked_table = "<p>No report found.</p>"
+    ranked_note = ""
     if header and rows:
-        head = "".join(f"<th>{html.escape(c)}</th>" for c in header)
-        body = "".join(
-            "<tr>" + "".join(
-                f'<td class="{"num" if c.replace(".", "").replace("-", "").isdigit() else ""}">'
-                f"{html.escape(c)}</td>" for c in row
-            ) + "</tr>"
-            for row in rows
-        )
-        table_html = f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+        def is_number(value: str) -> bool:
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
 
-    label_rows = "".join(
-        f"<tr><td>{html.escape(r.get('pair_id', ''))}</td>"
-        f"<td>{html.escape(r.get('label_type', ''))}</td>"
-        f"<td>{'yes' if r.get('verified', '').strip().lower() == 'yes' else 'no'}</td></tr>"
-        for r in labels
-        if r.get("label_type") != "calibration"
+        # A column is numeric only when every value in it parses as a number, so
+        # a text column like Pair never inherits tabular figures.
+        width = max(len(r) for r in rows)
+        numeric_cols = {
+            i for i in range(width)
+            if i > 0 and all(i < len(r) and is_number(r[i]) for r in rows)
+        }
+        head_cells = [f'<th{" class=\"num\"" if i in numeric_cols else ""}>'
+                      f"{html.escape(name)}</th>" for i, name in enumerate(header)]
+        body = []
+        for row in rows:
+            label = row[2].lower() if len(row) > 2 else ""
+            cls = ' class="is-pos"' if label == "positive" else (
+                ' class="is-neg"' if label == "negative" else "")
+            cells = "".join(cell(value, i in numeric_cols)
+                            for i, value in enumerate(row))
+            body.append(f"<tr{cls}>{cells}</tr>")
+        ranked_table = (f"<table><thead><tr>{''.join(head_cells)}</tr></thead>"
+                        f"<tbody>{''.join(body)}</tbody></table>")
+        ranked_note = f"{len(rows)} pairs ordered by ipTM"
+
+    label_rows = []
+    for row in labels:
+        if row.get("label_type") == "calibration":
+            continue
+        ok = row.get("verified", "").strip().lower() == "yes"
+        pill = ('<span class="pill pill-yes">yes</span>' if ok
+                else '<span class="pill pill-no">no</span>')
+        label_rows.append(
+            f"<tr><td>{html.escape(row.get('pair_id', ''))}</td>"
+            f"<td>{html.escape(row.get('label_type', ''))}</td>"
+            f"<td>{'positive' if row.get('label') == '1' else 'negative'}</td>"
+            f"<td>{pill}</td></tr>")
+    label_table = (
+        "<table><thead><tr><th>Pair</th><th>Label class</th><th>Label</th>"
+        f"<th>Verified</th></tr></thead><tbody>{''.join(label_rows)}</tbody></table>"
+    ) if label_rows else "<p>No candidate file found.</p>"
+
+    label_note = (f"{benchmark} benchmark pairs · {verified} of {total_labels} verified"
+                  if labels else "")
+
+    return TPL.substitute(
+        favicon=FAVICON,
+        css=CSS,
+        repo=REPO,
+        kpis=kpis,
+        figure=figure,
+        ranked_table=ranked_table,
+        ranked_note=ranked_note,
+        label_table=label_table,
+        label_note=label_note,
+        tests="36",
     )
-    label_html = (
-        "<table><thead><tr><th>Pair</th><th>Label class</th><th>Verified</th></tr></thead>"
-        f"<tbody>{label_rows}</tbody></table>"
-    ) if labels else "<p>No candidate file found.</p>"
-
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>plant-ppi-screening — structural screening harness</title>
-<meta name="description" content="A harness for screening plant protein-protein interactions with structure prediction: batching, confidence parsing and ranking metrics.">
-<style>
-  :root {{ --ink:#1f2328; --muted:#59636e; --line:#d8dee4; --wash:#f6f8fa;
-           --green:#1a7f37; --amber:#9a6700; --amber-wash:#fff8e5; }}
-  * {{ box-sizing:border-box; }}
-  body {{ margin:0; background:#fff; color:var(--ink);
-          font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-          line-height:1.55; font-size:16px; }}
-  .wrap {{ max-width:880px; margin:0 auto; padding:56px 24px 80px; }}
-  header h1 {{ font-size:30px; letter-spacing:-0.02em; margin:0 0 10px; }}
-  .lede {{ font-size:17px; color:var(--muted); margin:0 0 18px; max-width:62ch; }}
-  .pill {{ display:inline-block; background:var(--amber-wash); color:var(--amber);
-           border:1px solid #e6d5a8; border-radius:999px; padding:4px 12px;
-           font-size:13px; font-weight:600; }}
-  nav {{ margin-top:18px; font-size:14px; }}
-  nav a {{ color:#0b5cad; text-decoration:none; margin-right:16px; }}
-  nav a:hover {{ text-decoration:underline; }}
-  h2 {{ font-size:14px; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted);
-        margin:44px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line); }}
-  p {{ margin:0 0 12px; }}
-  ol, ul {{ margin:0 0 12px; padding-left:20px; }}
-  li {{ margin-bottom:6px; }}
-  code {{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px;
-          background:var(--wash); padding:1px 5px; border-radius:4px; }}
-  .fig {{ border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff;
-          overflow-x:auto; }}
-  .fig svg {{ display:block; width:100%; height:auto; }}
-  .tag {{ font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase;
-          color:var(--amber); background:var(--amber-wash); border-radius:4px;
-          padding:2px 7px; margin-left:8px; vertical-align:middle; }}
-  .metrics {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
-              gap:10px; margin:14px 0 18px; }}
-  .metric {{ border:1px solid var(--line); border-radius:8px; padding:10px 12px;
-             background:var(--wash); }}
-  .metric-name {{ display:block; font-size:12px; text-transform:uppercase;
-                  letter-spacing:0.05em; color:var(--muted); }}
-  .metric-value {{ display:block; font-size:20px; font-weight:600;
-                   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }}
-  table {{ width:100%; border-collapse:collapse; font-size:14px; margin:8px 0 4px; }}
-  th {{ text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
-        color:var(--muted); border-bottom:1px solid var(--line); padding:8px 10px; }}
-  td {{ border-bottom:1px solid var(--wash); padding:8px 10px; }}
-  td.num {{ text-align:right; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }}
-  tbody tr:hover {{ background:var(--wash); }}
-  .note {{ font-size:13.5px; color:var(--muted); }}
-  .grid {{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }}
-  @media (max-width:640px) {{ .grid {{ grid-template-columns:1fr; }} .wrap {{ padding:36px 18px 60px; }} }}
-  footer {{ margin-top:56px; border-top:1px solid var(--line); padding-top:16px;
-            font-size:13px; color:var(--muted); }}
-  a {{ color:#0b5cad; }}
-</style>
-</head>
-<body>
-<div class="wrap">
-<header>
-  <h1>plant-ppi-screening</h1>
-  <p class="lede">A harness for screening plant protein–protein interactions with
-  structure prediction: resolve the proteins, batch the jobs within a free quota,
-  parse the confidence metrics, and score the ranking against known positives and
-  honest negatives.</p>
-  <span class="pill">Harness complete · predictions not yet run</span>
-  <nav>
-    <a href="{REPO}">Repository</a>
-    <a href="{REPO}/blob/main/docs/method.md">Method</a>
-    <a href="{REPO}/blob/main/docs/curating-labels.md">Label protocol</a>
-    <a href="{REPO}/blob/main/docs/running-predictions.md">Runbook</a>
-  </nav>
-</header>
-
-<h2>The problem</h2>
-<p>Finding an interaction by yeast two-hybrid or BiFC costs weeks per pair, so a
-transcription factor family cannot be screened that way. Structure prediction
-reverses the order of work: rank hundreds of pairs cheaply, then spend bench time on
-the top few percent. On plant proteins the naive version fails quietly — few
-structures are solved, alignments are thin, and disordered regions drag every
-confidence score down. A pipeline that submits full-length sequences and sorts by
-pLDDT looks confident and is wrong.</p>
-
-<h2>What the harness does</h2>
-<ol>
-  <li><code>resolve</code> — gene symbols to UniProt entries, with a synonym fallback
-      and explicit accession pinning for ambiguous symbols.</li>
-  <li><code>check-labels</code> — rejects duplicate pairs, placeholder sources, and a
-      negative class that is mostly easy decoys.</li>
-  <li><code>batch</code> — jobs within the 30-per-day quota and the 5,000-token cap;
-      over-budget pairs are skipped with a printed reason.</li>
-  <li><code>ingest</code> / <code>evaluate</code> — ipTM and chain-pair PAE into a
-      ranked table, AUC with bootstrap intervals, calibration gap reported separately.</li>
-</ol>
-
-<h2>Demo output <span class="tag">synthetic</span></h2>
-<div class="fig">{figure}</div>
-<p class="note">Synthetic scores, generated to prove the pipeline runs end to end.
-No AlphaFold job has been submitted, so this page reports no biological result.</p>
-<div class="metrics">{metric_html}</div>
-{table_html}
-
-<h2>Label set status</h2>
-<p class="note">{benchmark} benchmark pairs, {calibration} calibration pairs,
-{verified} of {len(labels)} rows verified. The evaluator refuses to compute metrics
-while any included pair remains unverified.</p>
-{label_html}
-
-<h2>Next steps</h2>
-<div class="grid">
-  <div>
-    <p><strong>Done.</strong> Resolution, validation, batching, parsing, ranking
-    metrics, a dependency-free figure, and 36 offline tests running in CI on every push.</p>
-  </div>
-  <div>
-    <p><strong>Not done.</strong> The predictions. Labels need literature
-    verification, and the server accepts jobs only by hand at 30 a day.</p>
-  </div>
-</div>
-
-<footer>
-  Generated from <code>demo/report/report.md</code> by <code>site/build.py</code> ·
-  MIT licensed · Disha Pirodiya ·
-  <a href="{REPO}">{REPO.replace('https://', '')}</a>
-</footer>
-</div>
-</body>
-</html>
-"""
 
 
 def main() -> int:
