@@ -111,6 +111,11 @@ def cmd_ingest(args: argparse.Namespace) -> int:
 
 def cmd_evaluate(args: argparse.Namespace) -> int:
     rows = _read_csv(Path(args.candidates))
+    if not Path(args.results).exists():
+        print(f"no scores file at {args.results}", file=sys.stderr)
+        print("run `python cli.py ingest --results results/` after downloading the jobs, "
+              "or `python cli.py demo` for an offline run on synthetic scores", file=sys.stderr)
+        return 1
     scores = {r["pair_id"]: r for r in results.read_scores(Path(args.results))}
 
     joined, unverified, calibration = [], [], []
