@@ -10,7 +10,7 @@ proteins, builds AlphaFold Server batch files within the free quota, parses the
 returned confidence metrics, and scores the ranking against known positives and
 honest negatives.
 
-**Status: the harness is complete and tested (35 unit tests). The predictions have
+**Status: the harness is complete and tested (36 unit tests). The predictions have
 not been run yet, so this repository contains no biological result.** The figure
 below is synthetic demo output, generated to prove the pipeline works. What remains,
 and how long it takes, is in [ROADMAP.md](ROADMAP.md).
@@ -125,7 +125,7 @@ data/candidates.csv      curated pairs with sources and verification flags
 docs/method.md           protocol, metric definitions, limitations
 docs/curating-labels.md  seven-step protocol for building a verified label set
 docs/running-predictions.md  upload, quota, download and scoring runbook
-tests/                   26 offline tests, no network required
+tests/                   36 offline tests, no network required
 .github/workflows/ci.yml tests plus the demo, on every push
 CITATION.cff             citation metadata (GitHub "Cite this repository")
 ```

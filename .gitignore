@@ -17,3 +17,5 @@ __pycache__/
 .DS_Store
 
 .vercel
+config.bat
+node_modules
